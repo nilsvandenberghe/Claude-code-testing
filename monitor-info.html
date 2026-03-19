@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor Info</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f1117;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 2rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      width: 100%;
+      max-width: 860px;
+    }
+
+    .card {
+      background: #1e2333;
+      border: 1px solid #2d3654;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .card.wide {
+      grid-column: span 2;
+    }
+
+    .label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    .value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      line-height: 1.2;
+    }
+
+    .value.small {
+      font-size: 1.1rem;
+    }
+
+    .sub {
+      font-size: 0.78rem;
+      color: #475569;
+      margin-top: 0.1rem;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #0ea5e920;
+      border: 1px solid #0ea5e940;
+      color: #38bdf8;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      letter-spacing: 0.05em;
+    }
+
+    .measuring {
+      color: #f59e0b;
+      font-size: 1.1rem;
+    }
+
+    .note {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: #334155;
+      max-width: 860px;
+      text-align: center;
+    }
+
+    #refresh-rate-bar {
+      height: 4px;
+      background: #1e2333;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+
+    #refresh-rate-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6366f1, #38bdf8);
+      border-radius: 2px;
+      transition: width 0.1s;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Main Monitor Info</h1>
+
+  <div class="grid">
+
+    <div class="card">
+      <span class="label">Physical Resolution</span>
+      <span class="value" id="phys-res">—</span>
+      <span class="sub" id="phys-res-sub"></span>
+    </div>
+
+    <div class="card">
+      <span class="label">CSS Resolution</span>
+      <span class="value" id="css-res">—</span>
+      <span class="sub">logical pixels (browser coordinate space)</span>
+    </div>
+
+    <div class="card">
+      <span class="label">Available Resolution</span>
+      <span class="value" id="avail-res">—</span>
+      <span class="sub">excludes taskbar &amp; docks</span>
+    </div>
+
+    <div class="card">
+      <span class="label">Viewport Size</span>
+      <span class="value" id="viewport">—</span>
+      <span class="sub">current browser window content area</span>
+    </div>
+
+    <div class="card">
+      <span class="label">Device Pixel Ratio</span>
+      <span class="value" id="dpr">—</span>
+      <span class="sub" id="dpr-sub"></span>
+    </div>
+
+    <div class="card">
+      <span class="label">Effective DPI</span>
+      <span class="value" id="dpi">—</span>
+      <span class="sub">devicePixelRatio × 96 (logical DPI)</span>
+    </div>
+
+    <div class="card">
+      <span class="label">Color Depth</span>
+      <span class="value" id="color-depth">—</span>
+      <span class="sub" id="color-sub"></span>
+    </div>
+
+    <div class="card">
+      <span class="label">Orientation</span>
+      <span class="value small" id="orientation">—</span>
+      <span class="sub" id="orientation-angle"></span>
+    </div>
+
+    <div class="card">
+      <span class="label">Refresh Rate</span>
+      <span id="refresh-rate" class="value measuring">Measuring…</span>
+      <span class="sub" id="refresh-sub">sampling via requestAnimationFrame</span>
+      <div id="refresh-rate-bar"><div id="refresh-rate-fill"></div></div>
+    </div>
+
+    <div class="card">
+      <span class="label">Multi-Screen</span>
+      <span class="value small" id="multi-screen">—</span>
+      <span class="sub" id="multi-screen-sub"></span>
+    </div>
+
+    <div class="card">
+      <span class="label">Color Gamut</span>
+      <span class="value small" id="gamut">—</span>
+      <span class="sub">via CSS media query</span>
+    </div>
+
+    <div class="card">
+      <span class="label">HDR Support</span>
+      <span class="value small" id="hdr">—</span>
+      <span class="sub">dynamic-range: high media query</span>
+    </div>
+
+  </div>
+
+  <p class="note">
+    Monitor name is not accessible from browser APIs — that is an OS-level detail the browser sandbox does not expose.
+    Refresh rate is measured by sampling frame timestamps over ~120 frames.
+  </p>
+
+  <script>
+    // --- Static info ---
+    function populate() {
+      const dpr = window.devicePixelRatio || 1;
+
+      // Physical resolution
+      const physW = Math.round(screen.width * dpr);
+      const physH = Math.round(screen.height * dpr);
+      document.getElementById('phys-res').textContent = `${physW} × ${physH}`;
+      document.getElementById('phys-res-sub').textContent = 'actual pixels on panel';
+
+      // CSS resolution
+      document.getElementById('css-res').textContent = `${screen.width} × ${screen.height}`;
+
+      // Available resolution
+      document.getElementById('avail-res').textContent = `${screen.availWidth} × ${screen.availHeight}`;
+
+      // Viewport
+      document.getElementById('viewport').textContent = `${window.innerWidth} × ${window.innerHeight}`;
+
+      // DPR
+      document.getElementById('dpr').textContent = dpr.toFixed(2);
+      const pct = Math.round(dpr * 100);
+      document.getElementById('dpr-sub').textContent = `${pct}% display scaling`;
+
+      // DPI
+      const dpi = Math.round(dpr * 96);
+      document.getElementById('dpi').textContent = `${dpi} dpi`;
+
+      // Color depth
+      const cd = screen.colorDepth;
+      document.getElementById('color-depth').textContent = `${cd}-bit`;
+      const colors = Math.pow(2, cd);
+      const label = cd >= 24 ? 'True Color (16M+ colors)' : cd >= 16 ? 'High Color' : 'Low Color';
+      document.getElementById('color-sub').textContent = label;
+
+      // Orientation
+      const ori = screen.orientation;
+      if (ori) {
+        const typeLabel = ori.type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        document.getElementById('orientation').textContent = typeLabel;
+        document.getElementById('orientation-angle').textContent = `${ori.angle}° rotation`;
+      } else {
+        document.getElementById('orientation').textContent = 'N/A';
+        document.getElementById('orientation-angle').textContent = 'Screen Orientation API not supported';
+      }
+
+      // Multi-screen (Screen Window Placement API)
+      if ('isExtended' in screen) {
+        const ext = screen.isExtended;
+        document.getElementById('multi-screen').textContent = ext ? 'Yes' : 'Single display';
+        document.getElementById('multi-screen-sub').textContent = ext
+          ? 'Extended display detected'
+          : 'No secondary displays detected';
+      } else {
+        document.getElementById('multi-screen').textContent = 'Unknown';
+        document.getElementById('multi-screen-sub').textContent = 'Screen Placement API not supported';
+      }
+
+      // Color gamut
+      let gamut = 'sRGB';
+      if (window.matchMedia('(color-gamut: rec2020)').matches) gamut = 'Rec. 2020';
+      else if (window.matchMedia('(color-gamut: p3)').matches) gamut = 'DCI-P3';
+      document.getElementById('gamut').textContent = gamut;
+
+      // HDR
+      const hdr = window.matchMedia('(dynamic-range: high)').matches;
+      document.getElementById('hdr').textContent = hdr ? 'Supported' : 'Not detected';
+    }
+
+    // --- Refresh rate via rAF sampling ---
+    function measureRefreshRate() {
+      const SAMPLES = 120;
+      const timestamps = [];
+
+      function tick(ts) {
+        timestamps.push(ts);
+
+        // Update progress bar
+        const pct = Math.min(100, (timestamps.length / SAMPLES) * 100);
+        document.getElementById('refresh-rate-fill').style.width = pct + '%';
+
+        if (timestamps.length < SAMPLES + 1) {
+          requestAnimationFrame(tick);
+          return;
+        }
+
+        // Calculate intervals between consecutive frames
+        const intervals = [];
+        for (let i = 1; i < timestamps.length; i++) {
+          intervals.push(timestamps[i] - timestamps[i - 1]);
+        }
+
+        // Trim outliers (top/bottom 10%)
+        intervals.sort((a, b) => a - b);
+        const trim = Math.floor(intervals.length * 0.1);
+        const trimmed = intervals.slice(trim, intervals.length - trim);
+        const avgInterval = trimmed.reduce((s, v) => s + v, 0) / trimmed.length;
+        const measured = 1000 / avgInterval;
+
+        // Snap to common rates
+        const common = [24, 30, 48, 60, 75, 90, 120, 144, 165, 240, 360];
+        const snapped = common.reduce((prev, cur) =>
+          Math.abs(cur - measured) < Math.abs(prev - measured) ? cur : prev
+        );
+
+        const el = document.getElementById('refresh-rate');
+        el.classList.remove('measuring');
+        el.textContent = `${snapped} Hz`;
+
+        document.getElementById('refresh-sub').textContent =
+          `measured ${measured.toFixed(1)} Hz → snapped to nearest common rate`;
+
+        document.getElementById('refresh-rate-fill').style.width = '100%';
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    // --- Re-populate on resize/orientation change ---
+    window.addEventListener('resize', populate);
+    screen.orientation?.addEventListener('change', populate);
+
+    populate();
+    measureRefreshRate();
+  </script>
+</body>
+</html>
