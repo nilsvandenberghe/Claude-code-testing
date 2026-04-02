@@ -1,0 +1,20 @@
+{
+  "name": "changelog-manager",
+  "version": "1.0.0",
+  "description": "Jira changelog manager with AI-powered rewrites",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.0",
+    "openai": "^6.32.0",
+    "undici": "^7.24.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Changelog Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-title">
+        <span class="header-logo">CL</span>
+        <div>
+          <h1>Changelog Manager</h1>
+          <p class="header-sub">Jira TW tickets &rarr; AI-improved changelogs</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="fetchBtn" class="btn btn-primary">Fetch tickets</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="toolbar" id="toolbar" style="display:none">
+    <div class="stats" id="stats"></div>
+    <div class="toolbar-right">
+      <div class="filters" id="filters">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="empty">No changelog</button>
+        <button class="filter-btn" data-filter="improved">Improved</button>
+        <button class="filter-btn" data-filter="approved">Approved</button>
+      </div>
+      <div class="bulk-actions">
+        <button id="improveAllBtn" class="btn btn-secondary">Improve all</button>
+        <button id="approveAllBtn" class="btn btn-success" disabled>Approve all improved</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="main" id="main">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">&#128196;</div>
+      <p>Click <strong>Fetch tickets</strong> to load Jira issues labelled <code>TW</code>.</p>
+    </div>
+  </main>
+
+  <div class="pagination" id="pagination" style="display:none">
+    <button id="loadMoreBtn" class="btn btn-secondary">Load more</button>
+    <span id="paginationInfo"></span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
