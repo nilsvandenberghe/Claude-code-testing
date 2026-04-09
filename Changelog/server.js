@@ -20,7 +20,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Validate required env vars on startup
-const REQUIRED_VARS = ['JIRA_BASE_URL', 'JIRA_EMAIL', 'JIRA_API_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL'];
+const REQUIRED_VARS = ['JIRA_BASE_URL', 'JIRA_EMAIL', 'JIRA_API_TOKEN', 'OPENROUTER_API_KEY'];
 const missing = REQUIRED_VARS.filter(k => !process.env[k]);
 if (missing.length > 0) {
   console.error(`Missing required environment variables: ${missing.join(', ')}`);
@@ -37,8 +37,8 @@ const jiraHeaders = {
 };
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL,
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: 'https://openrouter.ai/api/v1',
   fetch: insecureFetch,
 });
 
@@ -71,6 +71,13 @@ function adfToText(value) {
     if (!node) return '';
     if (node.type === 'text') return node.text || '';
     if (node.type === 'hardBreak') return '\n';
+    // inlineCard embeds a Jira issue link — extract the issue key from the URL
+    // e.g. https://lansweeper.atlassian.net/browse/LAN-18137#icft=LAN-18137
+    if (node.type === 'inlineCard') {
+      const url = node.attrs?.url || '';
+      const match = url.match(/\/browse\/([A-Z][A-Z0-9]+-\d+)/);
+      return match ? match[1] : '';
+    }
     const children = (node.content || []).map(walk).join('');
     if (node.type === 'paragraph') return children + '\n';
     if (node.type === 'listItem') return '* ' + children;
@@ -205,7 +212,7 @@ app.get('/api/tickets', async (req, res) => {
   }
 });
 
-// POST /api/improve — rewrite a changelog entry with GPT
+// POST /api/improve — rewrite a changelog entry with Claude
 app.post('/api/improve', async (req, res) => {
   try {
     const { key, summary, changelog, description } = req.body;
@@ -224,7 +231,7 @@ app.post('/api/improve', async (req, res) => {
     );
 
     const completion = await openai.chat.completions.create({
-      model: 'claude-opus-4.6',
+      model: 'anthropic/claude-opus-4',
       max_tokens: 1024,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
