@@ -115,10 +115,10 @@ FORMATTING & STRUCTURE
 - No bold, italic, emojis, or headings inside the final changelog line.
 - Keep each line one sentence where possible; two is acceptable if genuinely needed.
 
-Example pattern:
-* Fixed: LAN-12345 X was not working correctly.
-* Added: LAN-12346 Added X to allow Y.
-* Changed: LAN-12347 X has been improved to Y.
+Example pattern (no bullet prefix — output the line directly):
+Fixed: LAN-12345 X was not working correctly.
+Added: LAN-12346 Added X to allow Y.
+Changed: LAN-12347 X has been improved to Y.
 
 CATEGORY-SPECIFIC RULES
 
@@ -131,22 +131,22 @@ Fixed items:
   - "X could cause Y …"
 - Describe the problem, not the implementation detail.
 Examples:
-* Fixed: LAN-12345 Saving reports could fail with an error.
-* Fixed: LAN-99999 The installer could sometimes crash during setup.
+Fixed: LAN-12345 Saving reports could fail with an error.
+Fixed: LAN-99999 The installer could sometimes crash during setup.
 
 Added items:
 - Use "Added X …" or "X has been added …"
 - Explicitly mention the new capability and, if possible, its purpose in short.
 Examples:
-* Added: LAN-11111 A setting has been added to exclude specific hosts from scanning.
-* Added: LAN-22222 Added support for SNMPv3 credentials in OT discovery.
+Added: LAN-11111 A setting has been added to exclude specific hosts from scanning.
+Added: LAN-22222 Added support for SNMPv3 credentials in OT discovery.
 
 Changed items:
 - Use "X has been improved …", "X has been changed …", or "X has been updated …"
 - Focus on user-visible behavior: performance, consistency, usability, recognition, etc.
 Examples:
-* Changed: LAN-33333 The Assets page loading performance has been improved.
-* Changed: LAN-44444 OS detection for vendor X devices has been improved.
+Changed: LAN-33333 The Assets page loading performance has been improved.
+Changed: LAN-44444 OS detection for vendor X devices has been improved.
 
 STYLE & WORDING
 - Keep it short and precise: typically one clear sentence.
@@ -168,6 +168,17 @@ LENGTH
 
 // --- Routes ---
 
+// Status sort priority: lower number = shown first
+const STATUS_PRIORITY = { testing: 0, done: 1, resolved: 1, 'on hold': 2 };
+const LOW_PRIORITY_STATUSES = new Set(['new', 'to do', 'planned']);
+
+function statusPriority(status) {
+  const s = status.toLowerCase();
+  if (STATUS_PRIORITY[s] !== undefined) return STATUS_PRIORITY[s];
+  if (LOW_PRIORITY_STATUSES.has(s)) return 4;
+  return 3;
+}
+
 // GET /api/health — verify Jira connectivity and field discovery
 app.get('/api/health', async (req, res) => {
   try {
@@ -185,7 +196,7 @@ app.get('/api/tickets', async (req, res) => {
     const startAt = Math.max(0, parseInt(req.query.startAt) || 0);
     const maxResults = Math.min(100, Math.max(1, parseInt(req.query.maxResults) || 50));
 
-    const jql = 'labels = TW ORDER BY updated DESC';
+    const jql = 'labels = TW AND project != TS AND "Changelog status" = External ORDER BY updated DESC';
     const fields = `summary,description,${field.id},status,issuetype`;
 
     const { data } = await axios.get(`${JIRA_BASE_URL}/rest/api/3/search/jql`, {
@@ -204,6 +215,8 @@ app.get('/api/tickets', async (req, res) => {
       description: adfToText(issue.fields.description),
     }));
 
+    tickets.sort((a, b) => statusPriority(a.status) - statusPriority(b.status));
+
     res.json({ tickets, total: data.total, startAt: data.startAt, maxResults });
   } catch (err) {
     const detail = err.response?.data || err.message;
@@ -215,9 +228,14 @@ app.get('/api/tickets', async (req, res) => {
 // POST /api/improve — rewrite a changelog entry with Claude
 app.post('/api/improve', async (req, res) => {
   try {
-    const { key, summary, changelog, description } = req.body;
+    const { key, summary, changelog, description, issueType } = req.body;
     if (!key || !summary) {
       return res.status(400).json({ error: 'key and summary are required' });
+    }
+
+    // Vulnerability tickets always get a fixed vague entry — no Claude call needed
+    if (issueType === 'Vulnerability') {
+      return res.json({ improved: `Fixed: ${key} A security issue was resolved.` });
     }
 
     const parts = [`Issue: ${key}`, `Summary: ${summary}`];
@@ -246,7 +264,7 @@ app.post('/api/improve', async (req, res) => {
   }
 });
 
-// PUT /api/tickets/:key — write the approved changelog back to Jira
+// PUT /api/tickets/:key — write the approved changelog back to Jira and remove TW label
 app.put('/api/tickets/:key', async (req, res) => {
   try {
     const field = await getChangelogField();
@@ -259,7 +277,10 @@ app.put('/api/tickets/:key', async (req, res) => {
 
     await axios.put(
       `${JIRA_BASE_URL}/rest/api/3/issue/${req.params.key}`,
-      { fields: { [field.id]: fieldValue } },
+      {
+        fields: { [field.id]: fieldValue },
+        update: { labels: [{ remove: 'TW' }] },
+      },
       { headers: jiraHeaders, httpsAgent: jiraHttpsAgent }
     );
 
@@ -267,6 +288,22 @@ app.put('/api/tickets/:key', async (req, res) => {
   } catch (err) {
     const detail = err.response?.data || err.message;
     console.error(`PUT /api/tickets/${req.params.key} error:`, detail);
+    res.status(500).json({ error: err.message, detail });
+  }
+});
+
+// POST /api/tickets/:key/unlabel — remove TW label without touching changelog
+app.post('/api/tickets/:key/unlabel', async (req, res) => {
+  try {
+    await axios.put(
+      `${JIRA_BASE_URL}/rest/api/3/issue/${req.params.key}`,
+      { update: { labels: [{ remove: 'TW' }] } },
+      { headers: jiraHeaders, httpsAgent: jiraHttpsAgent }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    const detail = err.response?.data || err.message;
+    console.error(`POST /api/tickets/${req.params.key}/unlabel error:`, detail);
     res.status(500).json({ error: err.message, detail });
   }
 });

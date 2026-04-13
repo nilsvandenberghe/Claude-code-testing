@@ -72,9 +72,12 @@ function cardHTML(t) {
     : '<em>No changelog entry</em>';
   const originalClass = t.changelog.trim() ? '' : 'empty';
 
-  const improveLabel  = t.uiState === 'improving' ? 'Improving…' : (t.uiState === 'improved' || t.uiState === 'approved' ? 'Re-improve' : 'Improve');
-  const improveDis    = t.uiState === 'improving' || t.uiState === 'approving';
-  const approveDis    = t.uiState !== 'improved' || t.uiState === 'approving';
+  const busy          = ['improving', 'approving', 'unlabelling'].includes(t.uiState);
+  const done          = t.uiState === 'approved' || t.uiState === 'unlabelled';
+  const improveLabel  = t.uiState === 'improving' ? 'Improving…' : (['improved', 'approved'].includes(t.uiState) ? 'Re-improve' : 'Improve');
+  const improveDis    = busy || done;
+  const approveDis    = t.uiState !== 'improved' || busy;
+  const unlabelDis    = busy || done;
 
   let improvedSection = '';
   if (t.uiState === 'improving') {
@@ -94,8 +97,10 @@ function cardHTML(t) {
       <div class="changelog-block">
         <div class="block-label">Written to Jira</div>
         <div class="changelog-original">${escHtml(t.improved)}</div>
-        <div class="approved-badge">&#10003; Saved to Jira</div>
+        <div class="approved-badge">&#10003; Changelog saved &amp; TW label removed</div>
       </div>`;
+  } else if (t.uiState === 'unlabelled') {
+    improvedSection = `<div class="approved-badge" style="margin-top:8px">&#10003; TW label removed</div>`;
   } else if (t.uiState === 'error') {
     improvedSection = `<div class="error-msg">&#9888; ${escHtml(t.error || 'Something went wrong. Try again.')}</div>`;
   }
@@ -110,6 +115,7 @@ function cardHTML(t) {
       <div class="card-actions">
         <button class="btn btn-secondary btn-sm btn-improve" ${improveDis ? 'disabled' : ''}>${improveLabel}</button>
         <button class="btn btn-success btn-sm btn-approve" ${approveDis ? 'disabled' : ''}>Approve</button>
+        <button class="btn btn-secondary btn-sm btn-unlabel" ${unlabelDis ? 'disabled' : ''}>Remove label</button>
       </div>
     </div>
     <div class="ticket-summary">${escHtml(t.summary)}</div>
@@ -124,6 +130,7 @@ function cardHTML(t) {
 function bindCardEvents(card, ticket) {
   card.querySelector('.btn-improve')?.addEventListener('click', () => improveTicket(ticket.key));
   card.querySelector('.btn-approve')?.addEventListener('click', () => approveTicket(ticket.key));
+  card.querySelector('.btn-unlabel')?.addEventListener('click', () => unlabelTicket(ticket.key));
 
   // Keep improved text in sync as user edits
   const ta = card.querySelector('.changelog-improved');
@@ -225,6 +232,7 @@ async function improveTicket(key) {
         summary: ticket.summary,
         changelog: ticket.changelog,
         description: ticket.description,
+        issueType: ticket.issueType,
       }),
     });
     const data = await res.json();
@@ -267,6 +275,32 @@ async function approveTicket(key) {
     toast(`${key} saved to Jira`, 'success');
   } catch (err) {
     ticket.uiState = 'improved'; // allow retry
+    ticket.error = err.message;
+    toast(`${key}: ${err.message}`, 'error');
+  }
+
+  refreshCard(key);
+  renderStats();
+}
+
+// ---- Remove TW label only ----
+async function unlabelTicket(key) {
+  const ticket = state.tickets.find(t => t.key === key);
+  if (!ticket) return;
+
+  ticket.uiState = 'unlabelling';
+  ticket.error = '';
+  refreshCard(key);
+
+  try {
+    const res = await fetch(`/api/tickets/${key}/unlabel`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to remove label');
+
+    ticket.uiState = 'unlabelled';
+    toast(`${key} TW label removed`, 'success');
+  } catch (err) {
+    ticket.uiState = 'pending'; // allow retry
     ticket.error = err.message;
     toast(`${key}: ${err.message}`, 'error');
   }
